@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="CloudDrive：由公开 GitHub Repository 与 Releases 驱动的个人静态云盘。">
+  <title>CloudDrive</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <div id="app" class="shell">
+    <header class="topbar"><a class="brand" href="#/" aria-label="CloudDrive 首页"><span>☁</span> CloudDrive</a><label class="search"><span>⌕</span><input id="search-input" type="search" autocomplete="off" placeholder="搜索文件、文件夹、标签…"></label><button id="refresh-button" class="icon-button" type="button" title="刷新文件列表">↻</button><select id="theme-select" aria-label="主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></header>
+    <main><nav id="breadcrumbs" class="breadcrumbs" aria-label="目录路径"></nav>
+      <section class="tools"><button id="filters-toggle" type="button" class="secondary"><span id="filter-count">筛选 0</span></button><select id="sort-select" aria-label="排序"><option value="name-asc">名称 A–Z</option><option value="name-desc">名称 Z–A</option><option value="updated-desc">更新时间：新 → 旧</option><option value="updated-asc">更新时间：旧 → 新</option><option value="size-asc">大小：小 → 大</option><option value="size-desc">大小：大 → 小</option><option value="downloads-desc">Release 下载次数：高 → 低</option><option value="downloads-asc">Release 下载次数：低 → 高</option></select><button id="view-button" type="button" class="secondary">▦ 网格</button></section>
+      <section id="filter-panel" class="filters hidden" aria-label="筛选"><div><h3>标签</h3><div id="tag-options" class="checks"></div></div><div><h3>格式</h3><div id="extension-options" class="checks"></div></div><label>来源<select id="source-filter"><option value="all">全部</option><option value="repository">Repository</option><option value="release">GitHub Releases</option></select></label><label>大小<select id="size-filter"><option value="all">全部</option><option value="small">&lt; 10 MB</option><option value="medium">10 MB – 100 MB</option><option value="large">100 MB – 1 GB</option><option value="huge">&gt; 1 GB</option></select></label><button id="clear-filters" type="button" class="link-button">清除筛选</button></section>
+      <p id="status-line" class="status" aria-live="polite"></p><section id="file-list" class="file-list list" aria-live="polite"></section>
+    </main>
+  </div>
+  <div id="detail-overlay" class="overlay hidden"><aside class="drawer" role="dialog" aria-modal="true" aria-label="文件详情"><button id="detail-close" class="close" type="button" aria-label="关闭">×</button><div id="detail-body"></div></aside></div>
+  <div id="preview-overlay" class="overlay hidden"><section class="preview" role="dialog" aria-modal="true" aria-label="图片预览"><button id="preview-close" class="close" type="button" aria-label="关闭">×</button><img id="preview-image" alt=""><p id="preview-caption"></p></section></div>
+  <div id="proxy-overlay" class="overlay hidden"><section class="proxy-picker" role="dialog" aria-modal="true" aria-label="选择加速线路"><button id="proxy-close" class="close" type="button" aria-label="关闭">×</button><h2>选择加速线路</h2><div id="proxy-options"></div><p>第三方线路由你自行配置；始终可选择官方下载。</p></section></div><div id="toast" class="toast hidden" role="status"></div>
+  <script src="config/config.js"></script><script src="js/storage.js"></script><script src="js/parser.js"></script><script src="js/github.js"></script><script src="js/releases.js"></script><script src="js/filter.js"></script><script src="js/search.js"></script><script src="js/sort.js"></script><script src="js/download.js"></script><script src="js/preview.js"></script><script src="js/ui.js"></script><script src="js/app.js"></script>
+</body></html>
