@@ -6,7 +6,7 @@ const CONFIG = {
     branch: "主要"
   },
   downloadProxies: [
-    // { name: "加速线路 1", prefix: "https://example-proxy.invalid/" }
+     { name: "加速线路 1", prefix: "https://gh-proxy.org/" }
   ],
   cacheMinutes: 5
 };
