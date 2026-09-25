@@ -1,11 +1,19 @@
 (() => {
-  const Store = window.CloudDriveStorage, Parser = window.CloudDriveParser, Search = window.CloudDriveSearch, Filter = window.CloudDriveFilter, Sort = window.CloudDriveSort;
-  const initialFilters = () => ({ tags: [], extensions: [], source: "all", size: "all" });
+  const Store = window.CloudDriveStorage, Parser = window.CloudDriveParser,
+    Search = window.CloudDriveSearch, Filter = window.CloudDriveFilter, Sort = window.CloudDriveSort;
+  // The index cache is an optimisation, never a dependency: if js/cache.js is
+  // missing the app still loads and simply refetches from the API.
+  const Cache = window.CloudDriveCache || {
+    read: async () => null,
+    write: async () => ({ ok: false, message: "本地索引缓存模块未加载（js/cache.js 缺失），本次结果未缓存；功能不受影响，但刷新会重新请求 API。" }),
+    remove: async () => true
+  };
+  const CACHE_SCHEMA = "v2"; // bump when the item model gains fields
+  const initialFilters = () => ({ tags: [], extensions: [], source: "all", size: "all", platform: "all" });
   const state = { repo: [], releases: [], query: "", route: "", filters: initialFilters(), sort: "updated-desc", view: Store.get("view", "list"), theme: Store.get("theme", "system"), loading: false, error: "", warning: "" };
   let ui;
-  function cacheKey() { return `data:${CONFIG.github.owner}/${CONFIG.github.repo}@${CONFIG.github.branch}`; }
+  function cacheKey() { return `${CACHE_SCHEMA}:data:${CONFIG.github.owner}/${CONFIG.github.repo}@${CONFIG.github.branch}`; }
   function cacheValid(cache) { return cache && Date.now() - cache.savedAt < (CONFIG.cacheMinutes || 5) * 60000; }
-  function saveCache() { Store.set(cacheKey(), { savedAt: Date.now(), repo: state.repo, releases: state.releases }); }
   function setTheme(theme) { state.theme = theme; Store.set("theme", theme); ui.setTheme(theme); }
   function allItems() { return [...state.repo, ...state.releases]; }
   function virtualReleaseFolder() { return Parser.createModel({ originalName: "release", path: "release", type: "folder", source: "release", virtual: true }); }
@@ -16,7 +24,11 @@
     if (state.route === "releases") return state.releases;
     const parent = pathForRoute();
     const repoItems = state.repo.filter(item => Parser.parentPath(item.path) === parent);
-    return parent ? repoItems : [virtualReleaseFolder(), ...repoItems];
+    if (parent) return repoItems;
+    // Do not fake a release folder when the repository itself failed to load;
+    // the empty state (with retry) is the honest answer.
+    if (state.error) return [];
+    return [virtualReleaseFolder(), ...repoItems];
   }
   function displayed() {
     let items = currentItems().filter(item => Filter.matches(item, state.filters));
@@ -24,14 +36,33 @@
     return items;
   }
   function render() {
-    const all = allItems(), items = displayed();
-    ui.render({ items, totalFiles: all.filter(item => item.type === "file").length, totalFolders: state.repo.filter(item => item.type === "folder").length + 1, query: state.query, filters: state.filters, sort: state.sort, view: state.view, options: Filter.options(all), breadcrumbs: breadcrumbs(), searching: Boolean(state.query.trim()), error: state.error, message: state.loading ? "正在从 GitHub 加载文件列表…" : state.warning, releaseGrouped: state.route === "releases" && !state.query.trim() && state.sort === "updated-desc" });
+    const all = allItems(), items = displayed(), options = Filter.options(all);
+    ui.render({
+      items,
+      totalFiles: all.filter(item => item.type === "file").length,
+      totalFolders: state.repo.filter(item => item.type === "folder").length + 1,
+      query: state.query, filters: state.filters, sort: state.sort, view: state.view, options,
+      breadcrumbs: breadcrumbs(), searching: Boolean(state.query.trim()), error: state.error,
+      loading: state.loading, message: state.warning,
+      showPlatform: state.route === "releases" && !state.query.trim(),
+      platformCounts: options.platforms, platformTotal: options.releaseTotal,
+      releaseGrouped: state.route === "releases" && !state.query.trim() && state.sort === "updated-desc"
+    });
   }
   function routeFromHash() { const raw = location.hash.replace(/^#\/?/, ""); if (!raw || raw === "releases" || raw.startsWith("repo/")) { state.route = raw; } else { state.route = ""; } state.query = ""; render(); }
   function navigate(route) { location.hash = route ? `/${route}` : "/"; if (state.route === route) routeFromHash(); }
   async function refresh(force = false) {
-    state.error = ""; state.warning = ""; const cached = Store.get(cacheKey());
-    if (!force && cacheValid(cached)) { state.repo = cached.repo || []; state.releases = cached.releases || []; render(); return; }
+    state.error = ""; state.warning = "";
+    if (!force) {
+      const cached = await Cache.read(cacheKey());
+      if (cacheValid(cached)) {
+        state.repo = cached.repo || [];
+        state.releases = cached.releases || [];
+        state.loading = false;
+        render();
+        return;
+      }
+    }
     state.loading = true; render();
     const [repoResult, releaseResult] = await Promise.allSettled([window.GitHubClient.loadIndex(), window.ReleaseClient.load()]);
     state.loading = false;
@@ -39,15 +70,27 @@
     else state.error = repoResult.reason.message || "无法加载仓库文件。";
     if (releaseResult.status === "fulfilled") state.releases = releaseResult.value;
     else state.warning = `${state.warning ? `${state.warning} ` : ""}Release 文件暂时无法加载：${releaseResult.reason.message || "网络错误"}`;
-    if (!state.error) saveCache(); render();
+    if (!state.error) {
+      const saved = await Cache.write(cacheKey(), { savedAt: Date.now(), schema: CACHE_SCHEMA, repo: state.repo, releases: state.releases });
+      if (!saved.ok) state.warning = `${state.warning ? `${state.warning} ` : ""}${saved.message}`;
+    }
+    render();
   }
   function removeValue(list, value) { return list.includes(value) ? list.filter(item => item !== value) : [...list, value]; }
+  function sortBy(key) {
+    const [currentKey, currentDir] = state.sort.split("-");
+    if (currentKey === key) state.sort = `${key}-${currentDir === "asc" ? "desc" : "asc"}`;
+    else state.sort = key === "name" ? "name-asc" : key === "size" ? "size-desc" : "updated-desc";
+    render();
+  }
   document.addEventListener("DOMContentLoaded", () => {
     ui = new window.CloudDriveUI({
-      navigate, refresh: () => { Store.remove(cacheKey()); refresh(true); }, search: query => { state.query = query; render(); },
-      sort: sort => { state.sort = sort; render(); }, view: () => { state.view = state.view === "list" ? "grid" : "list"; Store.set("view", state.view); render(); }, theme: setTheme,
+      navigate, refresh: () => { Cache.remove(cacheKey()); refresh(true); },
+      search: query => { state.query = query; render(); },
+      sort: sort => { state.sort = sort; render(); }, sortBy,
+      view: () => { state.view = state.view === "list" ? "grid" : "list"; Store.set("view", state.view); render(); }, theme: setTheme,
       filter: (key, value) => { state.filters[key] = value; render(); }, toggleFilter: (key, value) => { state.filters[key] = removeValue(state.filters[key], value); render(); },
-      clearFilters: () => { state.filters = initialFilters(); render(); }, openItem: item => ui.showDetail(item)
+      clearFilters: () => { state.filters = initialFilters(); render(); }, openItem: item => ui.openDetail(item)
     });
     setTheme(state.theme); window.addEventListener("hashchange", routeFromHash); document.addEventListener("clouddrive:proxy-choice", event => ui.showProxyPicker(event.detail)); document.addEventListener("clouddrive:notice", event => ui.notice(event.detail)); routeFromHash(); refresh();
   });

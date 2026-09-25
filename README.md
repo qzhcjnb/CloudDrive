@@ -6,11 +6,14 @@ CloudDrive 是一个不需要后端、数据库、登录或上传功能的个人
 
 - Repository 目录多级浏览、面包屑、浏览器前进/后退和刷新后保持目录（URL Hash）。
 - Releases 自动显示为虚拟 `release` 目录；若仓库真的含有 `release/`，它会显示为“Repository 目录”，二者数据来源明确区分。
-- 连续文件名前缀标签解析，例如 `[CS2][配置][重要] 我的设置.zip` 会显示为 `我的设置.zip` 与三个标签，原始文件名仍用于下载 URL。
-- 全局实时搜索（文件、文件夹、标签、扩展名、路径、Release 信息），标签/格式/来源/尺寸组合筛选和多种排序。
-- Release 按新版优先分组显示，保留同名 Asset 的不同版本，并显示下载次数、发布时间及 Release 链接。
-- 文件详情、图片预览、官方下载、可配置的多条下载加速线路、列表/网格视图、浅色/深色/跟随系统主题。
-- 内存运行状态 + localStorage 五分钟缓存；点击刷新会清除缓存并重新请求 API。
+- 连续文件名前缀标签解析，例如 `[CS2][配置][重要] 我的设置.zip` 会显示为 `我的设置.zip` 与三个标签，原始文件名仍用于下载 URL。标签本身就是按钮，点一下即按该标签筛选。
+- 全局实时搜索（文件、文件夹、标签、扩展名、路径、Release 信息），标签/格式/来源/尺寸/平台组合筛选和多种排序。
+- 表头可直接点击排序（类型与名称 / 大小 / 更新时间），重复点击切换升降序，并同步 `aria-sort` 与排序下拉框。
+- Release 按新版优先**折叠**为每个版本一行（默认只展开最新版，点标题展开/收起），避免上千个 Asset 一次性建行。
+- Release 平台识别：从 Asset 文件名自动判断 Windows / macOS / Linux / Android / iOS / 其他，仅在 `release` 目录显示平台筛选器并带数量。
+- 大列表分块渲染：搜索命中与巨大目录首批只渲染 150 行，滚动到底部再继续追加，状态栏显示“已显示 N / 总数”。
+- 文件详情（含复制下载直链、复制仓库路径）、图片预览、官方下载、可配置的多条下载加速线路、列表/网格视图、浅色/深色/跟随系统主题。
+- 内存运行状态 + IndexedDB 五分钟索引缓存；点击刷新会清除缓存并重新请求 API，缓存写入失败会在状态栏明确提示。
 - 没有分析、广告或第三方追踪；所有 API 内容通过 `textContent` 插入，避免文件名/Release 名称造成 XSS。
 
 ## 配置 GitHub 仓库
@@ -24,7 +27,8 @@ const CONFIG = {
     repo: "YOUR_REPOSITORY",
     branch: "main"
   },
-  downloadProxies: []
+  downloadProxies: [],
+  cacheMinutes: 5
 };
 ```
 
@@ -65,6 +69,12 @@ CloudDrive 不会用跨域 HEAD 请求猜测线路状态。配置一条线路时
 
 GitHub Repository API 通常不能低成本、可靠地提供每个文件的真正创建时间，也不能在不为每项额外请求提交记录的情况下提供准确更新时间。CloudDrive 不伪造这两个数据：Repository 文件显示“更新时间未知”和“暂无创建时间”；Release 则显示 API 提供的发布时间。Release Asset 下载次数来自 Releases API，可用于排序。
 
+平台分类是从文件名推断的启发式规则（Rust/Go 目标三元组、`.msi`/`.dmg`/`.deb`/`AppImage` 等），无法识别的归入“其他”。
+
+### 索引缓存
+
+索引（仓库文件树 + Release Asset）缓存在 **IndexedDB**（数据库 `clouddrive`），而不是 localStorage：大型仓库的 Release 索引会超出 localStorage 约 5 MB 的配额，且 localStorage 写入失败是静默的。实测 `astral-sh/uv`（2248 个文件项 + 4180 个 Asset）的结构化副本约 0.4 MB，配额约 10 GB；缓存命中时刷新不会发出任何 GitHub API 请求。缓存键带 schema 版本号，模型新增字段时旧缓存自动失效。
+
 未认证公共 API 有速率限制。达到限制、仓库不存在/私有、网络异常、空目录、无 Asset 与图片加载失败都会显示可理解的界面提示，而不会白屏。
 
 ## 本地预览
@@ -88,6 +98,7 @@ Hash 路由形如 `/#/repo/%E6%B8%B8%E6%88%8F/CS2`，服务器只会收到根页
 ```text
 CloudDrive/
 ├── index.html                 页面结构与相对资源入口
+├── DESIGN.md                  视觉规则与 Token 说明（设计唯一依据）
 ├── assets/favicon.svg         本地相对路径网站图标
 ├── config/config.js           唯一的仓库、分支、代理配置
 ├── css/style.css              主视觉、组件与深浅色变量
@@ -102,6 +113,7 @@ CloudDrive/
     ├── sort.js                文件夹优先排序
     ├── download.js            官方/代理下载
     ├── preview.js             图片预览能力判断
-    ├── storage.js             localStorage 封装
-    └── ui.js                  安全 DOM 渲染、详情与弹层
+    ├── storage.js             localStorage 封装（主题、视图等偏好）
+    ├── cache.js               IndexedDB 索引缓存（写入失败可上报）
+    └── ui.js                  骨架/行与卡片/详情/弹层/焦点与键盘行为/分块渲染/折叠
 ```

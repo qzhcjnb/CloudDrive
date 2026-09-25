@@ -1,21 +1,143 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="CloudDrive：由公开 GitHub Repository 与 Releases 驱动的个人静态云盘。">
-  <title>CloudDrive</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/responsive.css">
+  <meta name="color-scheme" content="light dark">
+  <title>CloudDrive</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
   <div id="app" class="shell">
-    <header class="topbar"><a class="brand" href="#/" aria-label="CloudDrive 首页"><span>☁</span> CloudDrive</a><label class="search"><span>⌕</span><input id="search-input" type="search" autocomplete="off" placeholder="搜索文件、文件夹、标签…"></label><button id="refresh-button" class="icon-button" type="button" title="刷新文件列表">↻</button><select id="theme-select" aria-label="主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></header>
-    <main><nav id="breadcrumbs" class="breadcrumbs" aria-label="目录路径"></nav>
-      <section class="tools"><button id="filters-toggle" type="button" class="secondary"><span id="filter-count">筛选 0</span></button><select id="sort-select" aria-label="排序"><option value="name-asc">名称 A–Z</option><option value="name-desc">名称 Z–A</option><option value="updated-desc">更新时间：新 → 旧</option><option value="updated-asc">更新时间：旧 → 新</option><option value="size-asc">大小：小 → 大</option><option value="size-desc">大小：大 → 小</option><option value="downloads-desc">Release 下载次数：高 → 低</option><option value="downloads-asc">Release 下载次数：低 → 高</option></select><button id="view-button" type="button" class="secondary">▦ 网格</button></section>
-      <section id="filter-panel" class="filters hidden" aria-label="筛选"><div><h3>标签</h3><div id="tag-options" class="checks"></div></div><div><h3>格式</h3><div id="extension-options" class="checks"></div></div><label>来源<select id="source-filter"><option value="all">全部</option><option value="repository">Repository</option><option value="release">GitHub Releases</option></select></label><label>大小<select id="size-filter"><option value="all">全部</option><option value="small">&lt; 10 MB</option><option value="medium">10 MB – 100 MB</option><option value="large">100 MB – 1 GB</option><option value="huge">&gt; 1 GB</option></select></label><button id="clear-filters" type="button" class="link-button">清除筛选</button></section>
-      <p id="status-line" class="status" aria-live="polite"></p><section id="file-list" class="file-list list" aria-live="polite"></section>
+    <header class="topbar">
+      <a class="brand" href="#/" aria-label="CloudDrive 首页">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 18h9.2a3.8 3.8 0 0 0 .4-7.6 5.6 5.6 0 0 0-10.8 1.2A3.2 3.2 0 0 0 7.5 18Z"/></svg></span>
+        <span class="brand-name">CloudDrive</span>
+      </a>
+      <div class="search" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.6 4.6"/></svg>
+        <input id="search-input" type="search" autocomplete="off" placeholder="搜索文件、文件夹、标签…" aria-label="搜索文件">
+        <button id="search-clear" class="search-clear" type="button" aria-label="清除搜索" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="topbar-actions">
+        <button id="refresh-button" class="icon-button" type="button" title="刷新文件列表" aria-label="刷新文件列表"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.05-4.95"/><path d="M19.2 4v4.3h-4.3"/></svg></button>
+        <select id="theme-select" aria-label="主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select>
+      </div>
+    </header>
+
+    <main>
+      <div class="location">
+        <span class="location-label">当前位置</span>
+        <nav id="breadcrumbs" class="breadcrumbs" aria-label="目录路径"></nav>
+      </div>
+
+      <section class="toolbar" aria-label="文件工具栏">
+        <div class="toolbar-lead">
+          <button id="filters-toggle" class="ghost-button" type="button" aria-expanded="false" aria-controls="filter-panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 6.5h16M7 12h10M10 17.5h4"/></svg>
+            <span id="filter-count">筛选 0</span>
+          </button>
+          <label class="visually-hidden" for="sort-select">排序</label>
+          <select id="sort-select">
+            <option value="name-asc">名称 A–Z</option>
+            <option value="name-desc">名称 Z–A</option>
+            <option value="updated-desc">更新时间：新 → 旧</option>
+            <option value="updated-asc">更新时间：旧 → 新</option>
+            <option value="size-asc">大小：小 → 大</option>
+            <option value="size-desc">大小：大 → 小</option>
+            <option value="downloads-desc">Release 下载次数：高 → 低</option>
+            <option value="downloads-asc">Release 下载次数：低 → 高</option>
+          </select>
+          <label id="platform-field" class="visually-hidden-field hidden">
+            <span class="visually-hidden">平台（仅 Releases）</span>
+            <select id="platform-filter"></select>
+          </label>
+          <button id="view-button" class="ghost-button" type="button" aria-label="切换到网格视图"></button>
+        </div>
+        <p id="status-line" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="filter-panel" class="filters hidden" aria-label="筛选">
+        <div>
+          <h3>标签</h3>
+          <div id="tag-options" class="checks"></div>
+        </div>
+        <div>
+          <h3>格式</h3>
+          <div id="extension-options" class="checks"></div>
+        </div>
+        <label>来源
+          <select id="source-filter">
+            <option value="all">全部</option>
+            <option value="repository">Repository</option>
+            <option value="release">GitHub Releases</option>
+          </select>
+        </label>
+        <label>大小
+          <select id="size-filter">
+            <option value="all">全部</option>
+            <option value="small">&lt; 10 MB</option>
+            <option value="medium">10 MB – 100 MB</option>
+            <option value="large">100 MB – 1 GB</option>
+            <option value="huge">&gt; 1 GB</option>
+          </select>
+        </label>
+        <button id="clear-filters" type="button" class="link-button">清除筛选</button>
+      </section>
+
+      <div id="file-head" class="file-head" role="row">
+        <span class="head-cell" role="columnheader" aria-sort="none"><button class="head-sort" type="button" data-sort="name">类型与名称<span class="head-caret" aria-hidden="true"></span></button></span>
+        <span class="head-cell" role="columnheader"><span class="head-label">标签</span></span>
+        <span class="head-cell" role="columnheader"><span class="head-label">来源或类型</span></span>
+        <span class="head-cell head-size" role="columnheader" aria-sort="none"><button class="head-sort" type="button" data-sort="size">大小<span class="head-caret" aria-hidden="true"></span></button></span>
+        <span class="head-cell head-date" role="columnheader" aria-sort="none"><button class="head-sort" type="button" data-sort="updated">更新时间<span class="head-caret" aria-hidden="true"></span></button></span>
+      </div>
+
+      <section id="file-list" class="file-list" aria-live="polite"></section>
     </main>
   </div>
-  <div id="detail-overlay" class="overlay hidden"><aside class="drawer" role="dialog" aria-modal="true" aria-label="文件详情"><button id="detail-close" class="close" type="button" aria-label="关闭">×</button><div id="detail-body"></div></aside></div>
-  <div id="preview-overlay" class="overlay hidden"><section class="preview" role="dialog" aria-modal="true" aria-label="图片预览"><button id="preview-close" class="close" type="button" aria-label="关闭">×</button><img id="preview-image" alt=""><p id="preview-caption"></p></section></div>
-  <div id="proxy-overlay" class="overlay hidden"><section class="proxy-picker" role="dialog" aria-modal="true" aria-label="选择加速线路"><button id="proxy-close" class="close" type="button" aria-label="关闭">×</button><h2>选择加速线路</h2><div id="proxy-options"></div><p>第三方线路由你自行配置；始终可选择官方下载。</p></section></div><div id="toast" class="toast hidden" role="status"></div>
-  <script src="config/config.js"></script><script src="js/storage.js"></script><script src="js/parser.js"></script><script src="js/github.js"></script><script src="js/releases.js"></script><script src="js/filter.js"></script><script src="js/search.js"></script><script src="js/sort.js"></script><script src="js/download.js"></script><script src="js/preview.js"></script><script src="js/ui.js"></script><script src="js/app.js"></script>
-</body></html>
+
+  <div id="detail-overlay" class="overlay hidden">
+    <aside class="drawer" role="dialog" aria-modal="true" aria-label="文件详情" tabindex="-1">
+      <button id="detail-close" class="close" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      <div id="detail-body"></div>
+    </aside>
+  </div>
+
+  <div id="preview-overlay" class="overlay hidden">
+    <section class="preview" role="dialog" aria-modal="true" aria-label="图片预览" tabindex="-1">
+      <button id="preview-close" class="close" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      <img id="preview-image" alt="">
+      <p id="preview-caption"></p>
+    </section>
+  </div>
+
+  <div id="proxy-overlay" class="overlay hidden">
+    <section class="proxy-picker" role="dialog" aria-modal="true" aria-label="选择加速线路" tabindex="-1">
+      <button id="proxy-close" class="close" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      <h2>选择加速线路</h2>
+      <div id="proxy-options"></div>
+      <p>第三方线路由你自行配置；始终可选择官方下载。</p>
+    </section>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="config/config.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/cache.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/github.js"></script>
+  <script src="js/releases.js"></script>
+  <script src="js/filter.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/sort.js"></script>
+  <script src="js/download.js"></script>
+  <script src="js/preview.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
